@@ -1,15 +1,17 @@
 const express = require('express');
-const app = express()
 const axios = require('axios');
+require('dotenv').config()
 
-const PORT = 3333
+const app = express()
+const PORT = 8888
 
 const verify_token = '123123123'
 
 const workplaceAPI = axios.create({
-  baseURL: 'https://graph.facebook.com/me/messages',
-  headers: {
-      Authorization: 'Bearer <Your Integration Token>'
+    method: 'POST',
+    baseURL: 'https://graph.facebook.com/v2.6/me/messages',
+    headers: {
+        Authorization: process.env.ACCESS_TOKEN
   }
 });
 
@@ -29,40 +31,53 @@ app.get('/',(request, response) =>{
 })
 
 app.post('/',(request, response) => {
-  const senderId = request.body.entry[0].messaging[0].sender.id
-  const message = request.body.entry[0].messaging[0].message.text
 
-  if (request.body.object === 'page') {
+        
+    function callSendAPI(senderId, response) {
+        const request = {
+            data: {
+                recipient: { id: senderId },
+                message: { text: response }
+            }
+        }
 
-    // Iterate over each entry - there may be multiple if batched
-    request.body.entry.forEach(function(entry) {
+        workplaceAPI(request)
+        .catch((err) => {
+            console.error(err.response.data);
+        });
+    } 
 
-      // Get the webhook event. entry.messaging is an array, but 
-      // will only ever contain one event, so we get index 0
-      let webhook_event = entry.messaging[0];
-      console.log(webhook_event);
-      
-    });
 
-    // Return a '200 OK' response to all events
-    res.status(200).send('EVENT_RECEIVED');
+    const handleMessage = (senderId, received_message) => {
+        callSendAPI(senderId, response)
+    }
 
-  } else {
-    // Return a '404 Not Found' if event is not from a page subscription
-    res.sendStatus(404);
-  }
 
-  console.log(message)
+    const handlePostback = (senderId) => {
+        response = "Eae!"
+        callSendAPI(senderId, 'response')
+    }
 
-  const payload = {
-    recipient: { id: senderId }, 
-    message: { text: 'Hello World' }
-  }
+    if (request.body.object === 'page') {
 
+        const senderId = request.body.entry.map((entry) => {
+
+            var webhook_event = entry.messaging[0];
+            console.log(webhook_event);
+            return webhook_event.sender.id
+        
+        });
+        
+        response.status(200).send('EVENT_RECEIVED');
+        handlePostback(...senderId)
+
+    } else {
+        response.sendStatus(404);
+    }
 
 
 })
 
 app.listen(PORT, () => {
   console.log(`App listening on port ${PORT}`)
-})
+});
